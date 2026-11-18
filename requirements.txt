@@ -1,0 +1,5 @@
+anthropic>=0.111.0
+numpy
+sentencepiece>=0.2.0
+torch            # install the CUDA build from pytorch.org for fast training
+pillow           # only for pipeline/tools/make_logo.py

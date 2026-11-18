@@ -1,0 +1,55 @@
+# ---- secrets -------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ---- generated data, models, checkpoints (large; publish models as a GitHub Release) ----
+data/*
+data_demo/
+!data/sources/
+data/sources/*/*
+!data/sources/*/.gitkeep
+# the training data is published: raw Gemini conversations and the built dataset (no .bin files)
+!data/generated/
+data/generated/*
+!data/generated/device*.jsonl
+!data/dataset/
+data/dataset/*
+!data/dataset/train.jsonl
+!data/dataset/val.jsonl
+*.bin
+*.pt
+*.ckpt
+*.safetensors
+
+# the earlier maths tutor (models, data, firmware images; ~550 MB, kept locally)
+backup/
+
+# ---- Python --------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# ---- firmware / PlatformIO ----------------------------------------------
+firmware/.pio/
+firmware/.vscode/
+firmware/host/host_chat
+firmware/host/host_chat.exe
+*.o
+*.elf
+*.map
+
+# ---- editors, OS, tools --------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+.claude/settings.local.json
+
+# ---- local AI-assistant notes (kept out of the repo) ----
+CLAUDE.md

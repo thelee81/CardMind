@@ -1,0 +1,15 @@
+# Normalise line endings; shell scripts must stay LF so they run in Git Bash / Linux.
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.cpp text eol=lf
+*.ini text eol=lf
+*.csv text eol=lf
+*.md text eol=lf
+
+*.jpg binary
+*.png binary
+*.pdf binary
+*.bin binary
