@@ -103,7 +103,7 @@ It is not an LLM, and it is small even next to small language models (SLMs). It 
 - An **M5Stack Cardputer v1.1** (ESP32-S3FN8)
 - A **microSD card** (any size, FAT32)
 - [PlatformIO](https://platformio.org/) (VS Code extension or `pip install platformio`)
-- The model files `model.bin` and `kb.bin`, from the Releases page, or [build them yourself](#building-from-source)
+- The model files `model.bin` and `kb.bin`, from the [latest release](https://github.com/thelee81/CardMind/releases/latest), or [build them yourself](#building-from-source)
 
 ### 1. Flash the firmware
 
