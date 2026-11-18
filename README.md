@@ -28,6 +28,7 @@ Card: Script: repeat 5 { led red; wait 300; led off; wait 300 }
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [What kind of model this is](#what-kind-of-model-this-is)
 - [Quick start](#quick-start)
@@ -42,6 +43,19 @@ Card: Script: repeat 5 { led red; wait 300; led off; wait 300 }
 - [Training data](#training-data)
 - [Documentation](#documentation)
 - [License](#license)
+
+## Screenshots
+
+All photos are of a real Cardputer v1.1 running model d13.
+
+<p align="center"><img src="assets/screenshots/cardmind_ss1.jpeg" alt="CardMind boot logo on the Cardputer" width="560"><br><sub>The boot screen</sub></p>
+
+<table>
+<tr><td width="50%"><img src="assets/screenshots/cardmind_ss7.jpeg" alt="<code>battery?</code>: a live reading with a short comment"><br><sub><code>battery?</code>: a live reading with a short comment</sub></td><td width="50%"><img src="assets/screenshots/cardmind_ss6.jpeg" alt="<code>status report</code>: battery, chip, RAM, SD card, screen, volume, uptime"><br><sub><code>status report</code>: battery, chip, RAM, SD card, screen, volume, uptime</sub></td></tr>
+<tr><td width="50%"><img src="assets/screenshots/cardmind_ss3.jpeg" alt="<code>what is the mic noise level?</code>: the microphone, measured"><br><sub><code>what is the mic noise level?</code>: the microphone, measured</sub></td><td width="50%"><img src="assets/screenshots/cardmind_ss8.jpeg" alt="<code>wifi</code>: a Wi-Fi scan with the strongest network"><br><sub><code>wifi</code>: a Wi-Fi scan with the strongest network</sub></td></tr>
+<tr><td width="50%"><img src="assets/screenshots/cardmind_ss5.jpeg" alt="<code>what pin does the sd card use?</code>: an answer from a knowledge card"><br><sub><code>what pin does the sd card use?</code>: an answer from a knowledge card</sub></td><td width="50%"><img src="assets/screenshots/cardmind_ss2.jpeg" alt="<code>beep every second 2, 3 times</code>: a script, run after Enter"><br><sub><code>beep every second 2, 3 times</code>: a script, run after Enter</sub></td></tr>
+<tr><td width="50%"><img src="assets/screenshots/cardmind_ss4.jpeg" alt="<code>if battery is below 95 play beep</code>: a script with a condition"><br><sub><code>if battery is below 95 play beep</code>: a script with a condition</sub></td><td></td></tr>
+</table>
 
 ## How it works
 
@@ -369,6 +383,7 @@ CardMind/
 ├── requirements.txt
 ├── .env.example              API key template (copy to .env)
 ├── assets/logo/              logo files
+├── assets/screenshots/       photos of Card running on the device
 ├── docs/
 │   ├── DESIGN.md             architecture and design decisions
 │   └── RUNBOOK.md            procedures (build, train, flash, debug) and model history
