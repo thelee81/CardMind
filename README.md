@@ -104,7 +104,7 @@ It is not an LLM, and it is small even next to small language models (SLMs). It 
 - An **M5Stack Cardputer v1.1** (ESP32-S3FN8)
 - A **microSD card** (any size, FAT32)
 - [PlatformIO](https://platformio.org/) (VS Code extension or `pip install platformio`)
-- The model files `model.bin` and `kb.bin`, from the [latest release](https://github.com/thelee81/CardMind/releases/latest), or [build them yourself](#building-from-source)
+- The model files `model.bin` and `kb.bin`, from the [v1.0-d13 release](https://github.com/thelee81/CardMind/releases/tag/v1.0-d13), or [build them yourself](#building-from-source)
 
 ### 1. Flash the firmware
 
@@ -393,7 +393,8 @@ python pipeline/eval_scripts.py data_rlcd/sd_card/espllm/model.bin
 | Script requests giving a valid script | 23 of 23 |
 | Scripts exactly right | 19 of 23 |
 
-On the board, 14 of 15 hand-picked requests were answered correctly. The odd one out was a script whose
+The r1 model files are in the [v1.1-rlcd-r1 release](https://github.com/thelee81/CardMind/releases/tag/v1.1-rlcd-r1)
+(copy them to `/espllm/` on the TF card and restart the board). On the board, 14 of 15 hand-picked requests were answered correctly. The odd one out was a script whose
 `else` branch repeated the `then` branch.
 
 ## Limits
