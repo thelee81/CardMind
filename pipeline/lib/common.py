@@ -29,8 +29,18 @@ if os.environ.get("ESPLLM_DEMO"):  # tiny settings for the plumbing test (00_dem
     cfg.MAX_SEQ_LEN, cfg.MAX_ITERS, cfg.WARMUP_ITERS, cfg.EVAL_INTERVAL, cfg.EVAL_ITERS = 256, 300, 30, 100, 5
     cfg.BATCH_SIZE, cfg.DROPOUT, cfg.VAL_FRACTION = 16, 0.0, 0.05
 
+# Board: CARDMIND_BOARD (or BOARD in config.py) picks the device matcher, the knowledge cards and the
+# default data folder: "cardputer" -> data/, "rlcd" (Waveshare ESP32-S3-RLCD-4.2) -> data_rlcd/.
+BOARD = os.environ.get("CARDMIND_BOARD", getattr(cfg, "BOARD", "cardputer"))
+cfg.BOARD = BOARD
+from .devtext import set_board as _set_board  # noqa: E402
+_set_board(BOARD)
+if BOARD == "rlcd":
+    from . import kbtext as _kbtext  # noqa: E402
+    _kbtext.add_stopwords(_kbtext.RLCD_STOPWORDS)
+
 # ESPLLM_DATA lets the demo run in its own folder without touching real data.
-DATA = ROOT / os.environ.get("ESPLLM_DATA", "data")
+DATA = ROOT / os.environ.get("ESPLLM_DATA", "data_rlcd" if BOARD == "rlcd" else "data")
 SOURCES = DATA / "sources"           # sources/notes/*, sources/manuals/*
 KB_DIR = DATA / "kb"                 # passages (jsonl) for the knowledge base
 BATCH_DIR = DATA / "batches"         # Batch API state, manifests, raw results
@@ -80,7 +90,10 @@ def load_kb_passages():
     rows = [r for r in read_jsonl(CURRICULUM_PASSAGES) if not subjects or r.get("subject") in subjects]
     texts = [r["text"] for r in rows]
     if subjects and "device" in subjects:
-        from .device_cards import CARDS
+        if BOARD == "rlcd":
+            from .rlcd_cards import CARDS
+        else:
+            from .device_cards import CARDS
         texts += CARDS
     kinds = getattr(cfg, "KB_SOURCE_KINDS", None)
     return texts + [r["text"] for r in read_jsonl(SOURCE_PASSAGES) if not kinds or r.get("kind") in kinds]

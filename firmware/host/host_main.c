@@ -57,7 +57,13 @@ static void set_status(DevStatus *st, const char *kv) {
         {"sd_total_mb", &st->sd_total_mb}, {"sd_used_mb", &st->sd_used_mb}, {"mic_dbfs", &st->mic_dbfs},
         {"wifi_ok", &st->wifi_ok}, {"wifi_n", &st->wifi_n}, {"wifi_rssi", &st->wifi_rssi},
         {"wifi_ch", &st->wifi_ch}, {"bright", &st->bright}, {"vol", &st->vol}, {"voice_on", &st->voice_on},
-        {"chip_rev", &st->chip_rev}, {"cpu_mhz", &st->cpu_mhz}};
+        {"chip_rev", &st->chip_rev}, {"cpu_mhz", &st->cpu_mhz},
+        {"psram_kb", &st->psram_kb}, {"psram_total_kb", &st->psram_total_kb}, {"room_ok", &st->room_ok},
+        {"room_c10", &st->room_c10}, {"room_rh", &st->room_rh}, {"clock_ok", &st->clock_ok}, {"year", &st->year},
+        {"month", &st->month}, {"day", &st->day}, {"wday", &st->wday}, {"hour", &st->hour},
+        {"minute", &st->minute}, {"radar_ok", &st->radar_ok}, {"radar_n", &st->radar_n},
+        {"radar_dist", &st->radar_dist}, {"radar_angle", &st->radar_angle}, {"radar_speed", &st->radar_speed},
+        {"radar_approach", &st->radar_approach}, {"phone_ok", &st->phone_ok}};
     for (size_t k = 0; k < sizeof(ints) / sizeof(ints[0]); k++)
         if (!strcmp(key, ints[k].k)) *ints[k].p = atoi(v);
     if (!strcmp(key, "uptime_s")) st->uptime_s = atol(v);
@@ -85,7 +91,7 @@ static void host_dev(const DevReq *r, DevStatus *st, void *u) {
 }
 
 // --script: canonical text and a trace with fixed readings (same as scripttext.check()).
-static const int EXAMPLE_READINGS[SR_N] = {78, 41, -47, 44, 4980, 100, 50};
+static const int EXAMPLE_READINGS[SR_N] = {78, 41, -47, 44, 4980, 100, 50, 27, 61};
 typedef struct { char out[4096]; int len, items; } Trace;
 static void tr_add(Trace *t, const char *item) {
     if (t->items >= 40) return;
@@ -102,6 +108,8 @@ static void tr_branch(int r, int v, int ok, void *u) {
 }
 
 int main(int argc, char **argv) {
+    const char *board = getenv("CARDMIND_BOARD");  // "rlcd": the Waveshare ESP32-S3-RLCD-4.2 matcher
+    if (board && !strcmp(board, "rlcd")) dev_set_board(DEV_BOARD_RLCD);
     if (argc >= 3 && !strcmp(argv[1], "--calc")) {
         char out[256];
         puts(calc_line(argv[2], out, sizeof(out)) ? out : "NONE");
@@ -197,7 +205,7 @@ int main(int argc, char **argv) {
     chat.dev = host_dev;
     printf("model: %d layers, dim %d, vocab %d, ctx %d; kb: %s\n", h.n_layers, h.dim, h.vocab, e.ctx_len,
            have_kb ? "yes" : "no");
-    char line[512];
+    char line[2048];
     for (;;) {
         printf("\nyou> ");
         fflush(stdout);

@@ -6,6 +6,7 @@
 Checks: tokenizer (SentencePiece vs Python mirror vs C), calculator, knowledge-base
 search, and logits (PyTorch float vs NumPy int8 mirror vs C int8).
 """
+import os
 import random
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import numpy as np
 import sentencepiece as spm
 
 from lib.common import CKPT_DIR, DS_DIR, ROOT, SD_DIR, TOK_DIR, cfg, load_kb_passages, read_jsonl
+from lib import devtext
 from lib.devtext import dev_line, dev_parse, dev_plan, example_status
 from lib.kbtext import BM25Index, calc_line
 from lib.scripttext import check as script_check
@@ -34,6 +36,9 @@ SCRIPT_CASES = [
     "repeat 6 { show mic; wait 10000 }", "if mic < -40 { beep }", "ir 0x20 0x10; wait 200; ir 0x20 0x10",
     "repeat 100 { repeat 100 { beep } }", "repeat 3 { led blue", "led purple; bright 5", "foo", "", "led red;; beep",
     "repeat 2 { repeat 2 { repeat 2 { repeat 2 { beep } } } }", "wait 60000; wait 60000; wait 60000", "BEEP 440",
+    "if room > 28 { face sad; sound thunder } else { face happy }", "repeat 3 { sound woof; wait 800 }",
+    "show humid; show room", "if humid >= 70 { sound notify }", "face love; wait 5000; face normal", "sound moo",
+    "face grumpy", "sound", "SOUND RING; FACE Surprised",
 ]
 DEV_CASES = [
     "battery?", "battery status", "how hot is the chip", "free ram", "is there an sd card", "how noisy is it",
@@ -42,6 +47,14 @@ DEV_CASES = [
     "dim the screen", "set brightness to 40", "volume 30", "mute", "louder", "beep", "test sound please",
     "send ir address 4 command 8", "send ir 0x20", "send ir address 300 command 1", "hello", "what can you do",
     "blink the led red 5 times", "beep every 10 seconds", "if the battery is low then beep", "how many minutes since boot",
+]
+# Waveshare ESP32-S3-RLCD-4.2 board (devtext.set_board("rlcd"), CARDMIND_BOARD=rlcd for host_chat)
+RLCD_CASES = DEV_CASES + [
+    "how hot is it", "room temperature?", "humidity", "is the chip overheating", "what is i2c?", "what does i2c stand for",
+    "what i2c devices are connected", "scan i2c", "is anything connected", "what time is it", "what day is it",
+    "is anyone there", "radar", "is my phone connected", "bluetooth?", "play the woof sound", "bark", "ring the bell",
+    "chime", "look happy", "make a sad face", "smile", "look normal", "act surprised", "tf card", "psram free?",
+    "how long has it been on", "how do i use i2c in arduino", "what is the time and temperature", "status",
 ]
 fails = 0
 
@@ -52,8 +65,10 @@ def check(name, ok, detail=""):
     fails += 0 if ok else 1
 
 
-def host(*args):
-    return subprocess.run([str(HOST), *map(str, args)], capture_output=True, text=True, check=True).stdout.strip()
+def host(*args, board=None):
+    env = dict(os.environ, CARDMIND_BOARD=board) if board else None
+    return subprocess.run([str(HOST), *map(str, args)], capture_output=True, text=True, check=True,
+                          env=env).stdout.strip()
 
 
 def main():
@@ -77,16 +92,20 @@ def main():
         check("tokenizer: SentencePiece == C", not bad, f"({len(bad)} mismatches of {min(40, len(texts))})")
         bad = [(c, calc_line(c), host("--calc", c)) for c in CALC_CASES if (calc_line(c) or "NONE") != host("--calc", c)]
         check("calculator: python == C", not bad, str(bad[:2]) if bad else "")
-        dev_texts = DEV_CASES + [t for t in texts[:200]]
-        bad = []
-        for q in dev_texts:
-            r = dev_parse(q)
-            st = example_status()
-            dev_plan(r, st)
-            want = f"{r.intent} {r.script} {dev_line(r, st) or 'NONE'}"
-            if host("--dev", q) != want:
-                bad.append((q, want))
-        check("device requests: python == C", not bad, f"({len(bad)} of {len(dev_texts)})" + (f" e.g. {bad[0]}" if bad else ""))
+        for board, cases in (("cardputer", DEV_CASES), ("rlcd", RLCD_CASES)):
+            devtext.set_board(board)
+            dev_texts = cases + [t for t in texts[:200]]
+            bad = []
+            for q in dev_texts:
+                r = dev_parse(q)
+                st = example_status()
+                dev_plan(r, st)
+                want = f"{r.intent} {r.script} {dev_line(r, st) or 'NONE'}"
+                if host("--dev", q, board=board) != want:
+                    bad.append((q, want))
+            check(f"device requests ({board}): python == C", not bad,
+                  f"({len(bad)} of {len(dev_texts)})" + (f" e.g. {bad[0]}" if bad else ""))
+        devtext.set_board("cardputer")
         bad = [(q, script_check(q)) for q in SCRIPT_CASES if host("--script", q) != script_check(q)]
         from lib.devtext import script_hints
         hq = [q for q, _ in __import__("eval_scripts").CASES] + [t for t in texts[:100]]

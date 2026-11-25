@@ -15,13 +15,40 @@ import random
 from dataclasses import dataclass, field
 from typing import List
 
+# Board (enum DevBoard in device.h). CARDPUTER behaves exactly as before boards existed; RLCD is the
+# Waveshare ESP32-S3-RLCD-4.2 (room / clock / radar / phone / I2C-bus readings, sound / face actions).
+CARDPUTER, RLCD = 0, 1
+BOARDS = {"cardputer": CARDPUTER, "rlcd": RLCD}
+BOARD = CARDPUTER
+
+
+def set_board(board):
+    """board: CARDPUTER, RLCD or its name. Same as dev_set_board() in device.c.
+    Also sets READS / ACTIONS (in place) to the board's readings and actions; on the RLCD the requests
+    for missing hardware (Grove, screen, LED, brightness, IR) stay in them, because their Device line
+    says the board has none."""
+    global BOARD
+    BOARD = BOARDS[board] if isinstance(board, str) else board
+    if BOARD == RLCD:
+        READS[:] = RLCD_READS + [GROVE, SCREEN]
+        ACTIONS[:] = RLCD_ACTIONS + [LED_SET, BRIGHT_SET, IR_SEND]
+    else:
+        READS[:] = list(range(BATTERY, STATUS + 1))
+        ACTIONS[:] = list(range(LED_SET, IR_SEND + 1))
+
+
 # Intent ids: same order as enum DevIntent in device.h
 (NONE, BATTERY, TEMP, MEMORY, SD, MIC, WIFI, GROVE, UPTIME, SCREEN, VOLUME, CHIP, STATUS,
- LED_SET, BRIGHT_SET, VOL_SET, BEEP, IR_SEND) = range(18)
+ LED_SET, BRIGHT_SET, VOL_SET, BEEP, IR_SEND,
+ ROOM, CLOCK, RADAR, PHONE, I2C, SOUND, FACE) = range(25)
 NAMES = ["none", "battery", "temp", "memory", "sd", "mic", "wifi", "grove", "uptime", "screen", "volume",
-         "chip", "status", "led_set", "bright_set", "vol_set", "beep", "ir_send"]
+         "chip", "status", "led_set", "bright_set", "vol_set", "beep", "ir_send",
+         "room", "clock", "radar", "phone", "i2c", "sound", "face"]
 READS = list(range(BATTERY, STATUS + 1))
 ACTIONS = list(range(LED_SET, IR_SEND + 1))
+RLCD_READS = [BATTERY, TEMP, MEMORY, SD, MIC, WIFI, UPTIME, VOLUME, CHIP, STATUS, ROOM, CLOCK, RADAR, PHONE, I2C]
+RLCD_ACTIONS = [VOL_SET, BEEP, SOUND, FACE]
+RLCD_MISSING = [GROVE, SCREEN, LED_SET, BRIGHT_SET, IR_SEND]  # the Device line says the board has none
 
 # arg codes for brightness / volume
 ARG_NONE, ARG_UP, ARG_DOWN = -1, -2, -3
@@ -40,6 +67,31 @@ I2C_NAMES = {
     0x5A: "MLX90614 infrared thermometer", 0x62: "SCD40 CO2", 0x68: "MPU6886 IMU",
     0x70: "QMP6988 pressure", 0x76: "BMP280 pressure", 0x77: "BMP280 pressure",
 }
+# RLCD: the board's own I2C devices (named before I2C_NAMES; 0x70 is the SHTC3 there)
+RLCD_I2C = {0x18: "ES8311 speaker codec", 0x40: "ES7210 mic ADC", 0x51: "PCF85063 clock",
+            0x70: "SHTC3 temperature and humidity"}
+SOUNDS = ["chime", "woof", "ribbit", "tweet", "honk", "ring", "ufo", "thunder", "roar", "notify", "startup"]
+FACES = ["normal", "happy", "sad", "angry", "surprised", "sleepy", "suspicious", "confused", "love", "curious"]
+SOUND_ALIAS = [("bark", 1), ("dog", 1), ("frog", 2), ("croak", 2), ("bird", 3), ("chirp", 3), ("horn", 4),
+               ("bell", 5), ("alien", 6), ("storm", 7), ("lion", 8)]
+FACE_ALIAS = [("neutral", 0), ("smile", 1), ("smiling", 1), ("glad", 1), ("cry", 2), ("frown", 2), ("mad", 3),
+              ("cross", 3), ("shocked", 4), ("tired", 5), ("sleep", 5), ("wink", 6), ("puzzled", 7),
+              ("heart", 8), ("hearts", 8)]
+FACE_NOUN = {"face", "eyes", "eye", "look", "expression", "emotion", "mood", "act", "pretend", "feel"}
+FACE_VERB = {"smile", "frown", "cry", "wink"}
+W_ROOM = {"room", "humidity", "humid", "ambient", "air", "indoor", "indoors", "shtc3", "weather"}
+W_CLOCK = {"time", "clock", "date", "day", "today", "rtc", "hour", "pcf85063", "year", "month"}
+W_RADAR = {"radar", "motion", "moving", "movement", "target", "targets", "someone", "anyone", "anybody", "people",
+           "person", "presence", "ld2451"}
+W_PHONE = {"phone", "bluetooth", "ble", "chronos", "paired", "pairing", "android"}
+CHIP_HEAT = {"chip", "cpu", "processor", "mcu", "esp32", "esp32s3", "overheating", "overheat", "internal"}
+GROVE_ONLY = {"grove", "port", "unit", "units", "hy2"}
+# an "i2c" question is a scan only with one of these; "what is i2c" goes to the knowledge cards
+SCAN_W = {"scan", "connected", "attached", "plugged", "devices", "device", "found", "detect", "detected", "find",
+          "list", "sensors", "addresses", "address", "anything", "on"}
+DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December"]
 
 
 @dataclass
@@ -79,6 +131,26 @@ class DevStatus:
     cpu_mhz: int = 240
     mac: str = "34:85:18:00:00:00"
     idf: str = "v4.4.7"
+    # RLCD board
+    psram_kb: int = 0
+    psram_total_kb: int = 0
+    room_ok: int = 0
+    room_c10: int = 0          # SHTC3, tenths of a degree C
+    room_rh: int = 0           # relative humidity %
+    clock_ok: int = 0
+    year: int = 0
+    month: int = 0
+    day: int = 0
+    wday: int = 0              # 0 = Sunday
+    hour: int = 0
+    minute: int = 0
+    radar_ok: int = 0          # frames received from the HLK-LD2451
+    radar_n: int = 0
+    radar_dist: int = 0        # nearest target: m, degrees, km/h
+    radar_angle: int = 0
+    radar_speed: int = 0
+    radar_approach: int = 0
+    phone_ok: int = 0
     # filled by dev_plan
     new_bright: int = -1
     new_vol: int = -1
@@ -175,6 +247,24 @@ def dev_parse(text: str) -> DevReq:
         r.script = 1  # a script request: no instant action or reading; the ctx says "Mode: script."
         return r
 
+    if not question and not howto and BOARD == RLCD:
+        for x in w:  # a named sound: "play the woof sound", "bark", "ring the bell"
+            if x in SOUNDS:
+                r.intent, r.arg = SOUND, SOUNDS.index(x)
+                return r
+            for a, k in SOUND_ALIAS:
+                if x == a:
+                    r.intent, r.arg = SOUND, k
+                    return r
+        if s & FACE_NOUN or s & FACE_VERB:  # the eyes: "look happy", "make a sad face", "smile"
+            for x in w:
+                if x in FACES:
+                    r.intent, r.arg = FACE, FACES.index(x)
+                    return r
+                for a, k in FACE_ALIAS:
+                    if x == a:
+                        r.intent, r.arg = FACE, k
+                        return r
     if not question and not howto:
         # IR: "send ir address 4 command 8"
         if s & IR_NOUN and s & IR_VERB:
@@ -237,6 +327,26 @@ def dev_parse(text: str) -> DevReq:
             if intent == MIC and s & {"speaker", "volume"}:
                 continue  # "how loud is the speaker" is the volume
             found.append(intent)
+    if BOARD == RLCD:
+        for words, intent in ((W_ROOM, ROOM), (W_CLOCK, CLOCK), (W_RADAR, RADAR), (W_PHONE, PHONE)):
+            if s & words:
+                found.append(intent)
+        if "tf" in s:
+            found.append(SD)
+        chip_heat, grove_only, scan = bool(s & CHIP_HEAT), bool(s & GROVE_ONLY), bool(s & SCAN_W)
+        out = []
+        for f in found:
+            if f == TEMP and not chip_heat:
+                f = ROOM  # "temperature" here is the room
+            if f == GROVE and not grove_only:  # "i2c": the board's bus
+                if question and not scan:
+                    continue  # "what is i2c": a facts question
+                f = I2C
+            if f not in out:
+                out.append(f)
+        found = out
+        if not found and s & GROVE_WEAK:
+            found.append(I2C)
     if not found and s & GROVE_WEAK:
         found.append(GROVE)
     if "how" in s and "long" in s and ("on" in s or "been" in s) and UPTIME not in found:
@@ -311,10 +421,73 @@ def _sd_short(st):
     return "SD card %s (%s used)" % (_size(st.sd_total_mb), _size(st.sd_used_mb))
 
 
+def _i2c_name(a):
+    if BOARD == RLCD and a in RLCD_I2C:
+        return RLCD_I2C[a]
+    return I2C_NAMES.get(a)
+
+
+def _rlcd_line(r: DevReq, st: DevStatus):
+    """RLCD Device line body, or None if the intent is formatted as on the Cardputer (rlcd_line in device.c)."""
+    i = r.intent
+    if i == MEMORY:
+        return ("free RAM %d KB, largest free block %d KB, PSRAM %s free of %s, flash %d MB, model %s, context %d tokens."
+                % (st.heap_kb, st.block_kb, _size_kb(st.psram_kb), _size_kb(st.psram_total_kb), st.flash_mb,
+                   _size_kb(st.model_kb), st.ctx_len))
+    if i == VOLUME:
+        return "speaker volume %d%%." % st.vol
+    if i == STATUS:
+        room = "room %s C %d%% humidity, " % (_tenths(st.room_c10), st.room_rh) if st.room_ok else ""
+        return "battery %s about %d%%, chip %s C, %sfree RAM %d KB, %s, volume %d%%, up %s." % (
+            _volts(st.bat_mv), st.bat_pct, _tenths(st.temp_c10), room, st.heap_kb, _sd_short(st), st.vol,
+            _uptime(st.uptime_s))
+    if i == ROOM:
+        if not st.room_ok:
+            return "room sensor (SHTC3) not responding."
+        return "room temperature %s C, humidity %d%%." % (_tenths(st.room_c10), st.room_rh)
+    if i == CLOCK:
+        if not st.clock_ok:
+            return "clock not set yet, it needs Wi-Fi or the phone app once."
+        return "time %02d:%02d, %s %d %s %d." % (st.hour, st.minute, DAYS[st.wday % 7], st.day,
+                                                  MONTHS[(st.month + 11) % 12], st.year)
+    if i == RADAR:
+        if not st.radar_ok:
+            return "no radar data, the HLK-LD2451 is not connected."
+        if not st.radar_n:
+            return "radar sees nothing moving."
+        return "radar sees %d moving target%s, nearest %d m at %d degrees, %s at %d km/h." % (
+            st.radar_n, "" if st.radar_n == 1 else "s", st.radar_dist, st.radar_angle,
+            "approaching" if st.radar_approach else "moving away", st.radar_speed)
+    if i == PHONE:
+        return ("phone connected over Bluetooth (Chronos app)." if st.phone_ok else
+                "no phone connected, pair RLCD Eyes in the Chronos app.")
+    if i == I2C:
+        parts = ["0x%02X (%s)" % (a, _i2c_name(a) or "unknown") for a in st.grove[:MAX_ADDRS]]
+        return "I2C scan (SDA G13, SCL G14) found %s." % (", ".join(parts) if parts else "nothing")
+    if i == SOUND:
+        return "played the %s sound." % SOUNDS[r.arg]
+    if i == FACE:
+        return "eyes back to normal." if r.arg == 0 else "eyes look %s%s for 1 minute." % (
+            "in " if r.arg == 8 else "", FACES[r.arg])  # in love
+    if i == GROVE:
+        return "this board has no Grove port, I2C is on header P1 pin 14 (SDA G13) and pin 16 (SCL G14)."
+    if i in (SCREEN, BRIGHT_SET):
+        return "the reflective screen has no backlight, so there is no brightness to set."
+    if i == LED_SET:
+        return "this board has no RGB LED."
+    if i == IR_SEND:
+        return "this board has no infrared transmitter."
+    return None
+
+
 def dev_line(r: DevReq, st: DevStatus):
     i = r.intent
     if i == NONE:
         return None
+    if BOARD == RLCD:
+        body = _rlcd_line(r, st)
+        if body is not None:
+            return "Device: " + body
     if i == BATTERY:
         body = "battery %s, about %d%%." % (_volts(st.bat_mv), st.bat_pct)
     elif i == TEMP:
@@ -389,12 +562,23 @@ def _size_kb(kb):
 
 # ------------------------------------------------------------------ fixed example (host test + verify)
 def example_status() -> DevStatus:
-    """Same values as dev_example() in device.c."""
-    return DevStatus(bat_mv=3921, bat_pct=78, temp_c10=415, heap_kb=44, block_kb=31, flash_mb=8, model_kb=4818,
-                     ctx_len=355, sd_type=3, sd_total_mb=15193, sd_used_mb=2150, mic_dbfs=-47, wifi_ok=1,
-                     wifi_n=6, wifi_ssid="HomeNet", wifi_rssi=-48, wifi_ch=6, grove=[0x44, 0x76],
-                     uptime_s=4980, bright=100, vol=50, voice_on=1, chip_rev=2, cpu_mhz=240,
-                     mac="34:85:18:7A:2C:90", idf="v4.4.7")
+    """Same values as dev_example() in device.c (for the current BOARD)."""
+    st = DevStatus(bat_mv=3921, bat_pct=78, temp_c10=415, heap_kb=44, block_kb=31, flash_mb=8, model_kb=4818,
+                   ctx_len=355, sd_type=3, sd_total_mb=15193, sd_used_mb=2150, mic_dbfs=-47, wifi_ok=1,
+                   wifi_n=6, wifi_ssid="HomeNet", wifi_rssi=-48, wifi_ch=6, grove=[0x44, 0x76],
+                   uptime_s=4980, bright=100, vol=50, voice_on=1, chip_rev=2, cpu_mhz=240,
+                   mac="34:85:18:7A:2C:90", idf="v4.4.7")
+    if BOARD == RLCD:  # Waveshare ESP32-S3-RLCD-4.2 (N16R8)
+        st.heap_kb, st.block_kb, st.flash_mb, st.model_kb, st.ctx_len = 74, 60, 16, 2706, 512
+        st.psram_kb, st.psram_total_kb = 5232, 8192
+        st.bright, st.vol, st.voice_on = 100, 30, 0
+        st.mac = "A4:CB:8F:DB:6A:5C"
+        st.grove = [0x18, 0x40, 0x51, 0x70]
+        st.room_ok, st.room_c10, st.room_rh = 1, 268, 61
+        st.clock_ok, st.year, st.month, st.day, st.wday, st.hour, st.minute = 1, 2026, 11, 19, 4, 18, 52
+        st.radar_ok, st.radar_n, st.radar_dist, st.radar_angle, st.radar_speed, st.radar_approach = 1, 1, 4, -12, 5, 1
+        st.phone_ok = 1
+    return st
 
 
 # ------------------------------------------------------------------ simulation (training data only)
@@ -434,7 +618,54 @@ def simulate(rng: random.Random) -> DevStatus:
     st.chip_rev = rng.choice([0, 1, 2])
     st.mac = "34:85:18:%02X:%02X:%02X" % (rng.randrange(256), rng.randrange(256), rng.randrange(256))
     st.idf = rng.choice(["v4.4.7", "v5.1.4", "v5.3.1"])
+    if BOARD == RLCD:
+        _simulate_rlcd(rng, st)
     return st
+
+
+# Sensors a maker might add on header P1 (shown by the RLCD I2C scan beside the board's own chips)
+RLCD_EXTRA_I2C = [0x23, 0x29, 0x38, 0x3C, 0x44, 0x48, 0x5A, 0x62, 0x68, 0x76, 0x77, 0x1F, 0x5F]
+
+
+def _simulate_rlcd(rng: random.Random, st: DevStatus):
+    """Waveshare ESP32-S3-RLCD-4.2: 16 MB flash, 8 MB PSRAM, ctx 512, no voice, the board's I2C chips."""
+    st.heap_kb = rng.randint(40, 140)
+    st.block_kb = max(8, st.heap_kb - rng.randint(5, 40))
+    st.flash_mb, st.model_kb, st.ctx_len = 16, rng.choice([2706, 2706, 2850]), 512
+    st.psram_total_kb = 8192
+    st.psram_kb = rng.choice([5232, rng.randint(4200, 5400), rng.randint(1500, 7900)])
+    st.voice_on, st.bright = 0, 100
+    st.vol = rng.choice([30, 30, rng.randrange(0, 101, 10)])
+    st.mac = "A4:CB:8F:%02X:%02X:%02X" % (rng.randrange(256), rng.randrange(256), rng.randrange(256))
+    st.idf = rng.choice(["v4.4.5", "v4.4.7", "v5.1.4"])
+    board = [0x18, 0x40, 0x51, 0x70]
+    r = rng.random()
+    if r < 0.6:
+        st.grove = board
+    elif r < 0.9:
+        st.grove = sorted(board + rng.sample(RLCD_EXTRA_I2C, rng.choice([1, 1, 2])))
+    else:  # a board chip not answering (loose connection, chip in reset)
+        st.grove = sorted(rng.sample(board, rng.randint(1, 3)))
+    st.room_ok = 0 if rng.random() < 0.05 else 1
+    st.room_c10 = rng.choice([rng.randint(180, 320), rng.randint(100, 380)])
+    st.room_rh = rng.choice([rng.randint(35, 70), rng.randint(15, 95)])
+    st.clock_ok = 0 if rng.random() < 0.08 else 1
+    st.year = rng.choice([2026, 2026, 2027])
+    st.month, st.day = rng.randint(1, 12), rng.randint(1, 28)
+    st.wday = rng.randrange(7)
+    st.hour, st.minute = rng.randrange(24), rng.randrange(60)
+    st.radar_ok = 0 if rng.random() < 0.35 else 1
+    st.radar_n = rng.choice([0, 0, 1, 1, 1, 2, 3]) if st.radar_ok else 0
+    st.radar_dist = rng.choice([rng.randint(1, 5), rng.randint(1, 30)])
+    st.radar_angle = rng.randint(-60, 60)
+    st.radar_speed = rng.choice([rng.randint(1, 8), rng.randint(1, 60)])
+    st.radar_approach = rng.choice([0, 1])
+    st.phone_ok = rng.choice([0, 1, 1])
+    if rng.random() < 0.1:
+        st.sd_type, st.sd_total_mb, st.sd_used_mb = 0, 0, 0
+    elif not st.sd_type:
+        st.sd_type, st.sd_total_mb = 3, 15193
+        st.sd_used_mb = rng.randint(1, 4000)
 
 
 # ------------------------------------------------------------------ script hints

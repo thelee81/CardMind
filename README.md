@@ -38,6 +38,7 @@ Card: Script: repeat 5 { led red; wait 300; led off; wait 300 }
 - [Building from source](#building-from-source)
 - [Testing on a PC](#testing-on-a-pc)
 - [Accuracy](#accuracy)
+- [Second board: Waveshare ESP32-S3-RLCD-4.2](#second-board-waveshare-esp32-s3-rlcd-42)
 - [Limits](#limits)
 - [Repository layout](#repository-layout)
 - [Training data](#training-data)
@@ -357,6 +358,44 @@ Model d13, measured through the PC build of the device code:
 All readings, actions and script commands have also been checked by hand on a real Cardputer. The
 model's history (d1 to d13) is in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
+## Second board: Waveshare ESP32-S3-RLCD-4.2
+
+The same C code also runs Card on the **Waveshare ESP32-S3-RLCD-4.2** (ESP32-S3 with 16 MB flash and
+8 MB PSRAM, 4.2" reflective screen), as one screen of a separate desk-companion firmware with a Wi-Fi chat
+page. That board has its own trained model (**r1**) because its hardware is different:
+
+- **readings:** room temperature and humidity (SHTC3), clock (PCF85063), radar (HLK-LD2451), phone link
+  (Chronos BLE), I2C bus scan, plus battery, chip, RAM and PSRAM, TF card, noise, Wi-Fi, uptime, volume
+- **actions:** volume, beeps, named sounds ("play the woof sound"), animated eyes ("make the eyes happy")
+- **missing hardware** (RGB LED, backlight, infrared, Grove) gets a "this board has no ..." Device line
+- **scripts** add `sound NAME`, `face NAME` and the readings `room` and `humid`:
+  `if room > 28 { face sad } else { face normal }`
+- **77 knowledge cards** (`pipeline/lib/rlcd_cards.py`): the board, the ESP32-S3 and general electronics
+
+The board is picked with `dev_set_board()` in C and `CARDMIND_BOARD=rlcd` (or `BOARD` in `config.py`) in
+the pipeline, which also switches the cards and uses the data folder `data_rlcd/`. The Cardputer matcher is
+unchanged. The RLCD data came from `pipeline/03_generate_rlcd.py` (2,342 Gemini requests, about $3) plus
+d13's Cardputer device and script conversations that do not mention Cardputer-only hardware, replayed
+through the RLCD matcher.
+
+```bash
+export CARDMIND_BOARD=rlcd
+python pipeline/03_generate_rlcd.py submit          # dry run; --yes to spend
+python pipeline/04_build_device_dataset.py          # then 05 to 09 as usual
+python pipeline/eval_device.py data_rlcd/sd_card/espllm/model.bin,data_rlcd/sd_card/espllm/kb.bin
+python pipeline/eval_scripts.py data_rlcd/sd_card/espllm/model.bin
+```
+
+| Test (r1, PC build) | Result |
+|---|---|
+| Live reading or action result stated correctly | 162 of 162 |
+| Replies that add a number not in the reading | 5 of 162 |
+| Script requests giving a valid script | 23 of 23 |
+| Scripts exactly right | 19 of 23 |
+
+On the board, 14 of 15 hand-picked requests were answered correctly. The odd one out was a script whose
+`else` branch repeated the `then` branch.
+
 ## Limits
 
 - **Short answers.** Replies are 1 to 3 sentences. The readings are copied from the device, but the
@@ -389,11 +428,12 @@ CardMind/
 │   └── RUNBOOK.md            procedures (build, train, flash, debug) and model history
 ├── pipeline/                 Python: data → model → device files
 │   ├── 03_generate_device.py     training data from Gemini (rounds 1 to 4)
+│   ├── 03_generate_rlcd.py       training data for the RLCD board
 │   ├── 04_build_device_dataset.py  replays data through the device rules and filters it
 │   ├── 05 … 09_*.py              tokenizer, pretokenize, train, export, knowledge base
 │   ├── 00 … 04 (others)          generic and demo path (notes → curriculum → conversations)
 │   ├── verify.py                 C vs Python checks
-│   ├── eval_device.py · eval_scripts.py · eval_sd.py
+│   ├── eval_device.py · eval_scripts.py · eval_sd.py · eval_kb_rlcd.py
 │   ├── chat.py                   chat in Python
 │   ├── lib/                      Python twins of the C code and shared helpers
 │   │   ├── devtext.py            request matcher, Device line, script hints   (↔ device.c)
@@ -402,8 +442,9 @@ CardMind/
 │   │   ├── npref.py              NumPy forward pass                           (↔ engine.c)
 │   │   ├── model.py              PyTorch model for training
 │   │   ├── device_cards.py       the 59 knowledge cards
+│   │   ├── rlcd_cards.py         the 77 RLCD board knowledge cards
 │   │   └── gemini.py · batch.py  API clients with a spending cap
-│   └── tools/make_logo.py        logo → firmware/src/logo.h
+│   └── tools/                    make_logo.py (logo → firmware/src/logo.h), fuzz_scripts.py (C vs Python)
 ├── firmware/                 PlatformIO project (Arduino on ESP-IDF)
 │   ├── platformio.ini · partitions.csv
 │   ├── src/
@@ -417,6 +458,7 @@ CardMind/
     ├── generated/device*.jsonl   raw training conversations from Gemini (rounds 1 to 4)
     ├── dataset/train.jsonl · val.jsonl   the built dataset the current model (d13) was trained on
     └── sources/notes/        your own notes for the knowledge base
+data_rlcd/                    the same for the RLCD board (model r1)
 ```
 
 ## Training data

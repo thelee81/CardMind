@@ -5,6 +5,12 @@ special-token ids from model.bin, and the retrieval threshold from kb.bin, so
 there is nothing to keep in sync by hand on the C side.
 """
 
+# ---------------------------------------------------------------- board
+# "cardputer" (M5Stack Cardputer v1.1, data/) or "rlcd" (Waveshare ESP32-S3-RLCD-4.2, data_rlcd/).
+# The environment variable CARDMIND_BOARD overrides this. It picks the device matcher (devtext /
+# device.c), the knowledge cards (device_cards.py / rlcd_cards.py) and the data folder.
+BOARD = "cardputer"
+
 # ---------------------------------------------------------------- character
 # Use case since 2026-11-17: "Card", a device assistant for makers (pipeline/03_generate_device.py).
 # The maths tutor "Bolt" (v5c) is backed up in backup/maths_tutor_2026-11-17; its settings were
@@ -41,7 +47,7 @@ if PROVIDER == "gemini":
 else:
     PLANNER_MODEL = "claude-opus-5-5"
     GENERATOR_MODEL = "claude-opus-5-5"
-BUDGET_USD = 30.0             # Gemini hard cap on total spend (all steps), from reported token usage
+BUDGET_USD = 28.0             # Gemini hard cap on total spend (all steps), from reported token usage
 GEMINI_CONCURRENCY = 16       # parallel requests (lower it if you hit 429 rate limits)
 PLANNER_EFFORT = "medium"     # low | medium | high | xhigh | max
 GENERATOR_EFFORT = "low"

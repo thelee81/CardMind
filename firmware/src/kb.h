@@ -18,6 +18,7 @@ typedef struct {
 } KB;
 
 int kb_open(KB *kb, const char *path);  // 0 on success
+int kb_open_fp(KB *kb, FILE *f);        // same, from an open stream (e.g. fmemopen of a flash partition); kb_close closes it
 void kb_close(KB *kb);
 // Best passage id for a query (or -1); *score gets its BM25 score.
 int kb_search(KB *kb, const char *query, float *score);

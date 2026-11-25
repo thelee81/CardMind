@@ -40,6 +40,17 @@ okay ok hi hello hey thanks thank yes yeah um uh hmm bolt
 """.split()))
 _STOP = set(STOPWORDS)
 MAX_WORD = 32
+# Extra retrieval stopwords for the RLCD knowledge base (written into its kb.bin, which the firmware reads,
+# so C needs no change). The Cardputer kb keeps STOPWORDS as it was.
+RLCD_STOPWORDS = """much many have has take takes get gets got work works need needs use using used thing
+things way kind something anything 0 1 2 3 4 5 6 7 8 9""".split()
+
+
+def add_stopwords(ws):
+    """Extend the retrieval stopwords (kb.bin carries the list, so rebuild kb.bin afterwards)."""
+    global STOPWORDS
+    STOPWORDS = sorted(set(STOPWORDS) | set(ws))
+    _STOP.update(ws)
 
 
 def words(text: str):

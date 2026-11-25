@@ -12,12 +12,13 @@ A turn is cut (with the rest of its conversation) when:
 
 Output: data/dataset/{train,val}.jsonl and tokenizer_corpus.txt (same format as step 4).
 """
+import itertools
 import random
 import re
 from collections import Counter
 
 from lib import devtext as D
-from lib.common import DS_DIR, GEN_DIR, cfg, ensure_dirs, load_kb_passages, read_jsonl, write_jsonl
+from lib.common import BOARD, DS_DIR, ROOT, GEN_DIR, cfg, ensure_dirs, load_kb_passages, read_jsonl, write_jsonl
 from lib.kbtext import SCRIPT_MODE, BM25Index, ascii_fold, calc_line
 from lib import scripttext as SC
 
@@ -48,9 +49,22 @@ def numbers(text):
     return {n.lstrip("-") for n in NUM.findall(t)}
 
 
+# (pattern, word the reply must contain; None = the first group)
+RLCD_KEYS = [
+    (r"this board has no (RGB|infrared|Grove)", None), (r"played the (\w+) sound", None),
+    (r"eyes look (?:in )?(\w+)", None), (r"eyes back to (normal)", None), (r"has no backlight", "backlight"),
+    (r"no radar data", "radar"), (r"no phone connected", "phone"), (r"clock not set", "not set"),
+    (r"\(SHTC3\) not responding", "sensor"), (r"^I2C scan .* found (0x[0-9A-F]+|nothing)", None),
+]
+
+
 def key_value(line):
     """What a reply to this Device line must state (same rule as eval_device.py)."""
     body = line[len("Device: "):]
+    for pat, want in RLCD_KEYS:  # RLCD board lines (Cardputer lines never match these)
+        m = re.search(pat, body)
+        if m:
+            return want if want else m.group(1)
     for word in ("no SD card", "nothing", "not changed", "not sent", "failed", "no networks", "off"):
         if word in body:
             return word.split()[-1]
@@ -132,6 +146,33 @@ def small_sd_copies(convs, rng):
                        turns=[dict(t, bot=t["bot"].replace(old, new)) for t in c["turns"]])
 
 
+# numbers that are part of the board's name or parts, not readings (RLCD: 4.2 inch screen, 18650 cell)
+BOARD_NUMS = {"4.2", "18650"} if BOARD == "rlcd" else set()
+
+
+# RLCD: d13's Cardputer device and script conversations are reused (replayed through the RLCD matcher,
+# which cuts any whose meaning changed, e.g. "temperature" is the room sensor here) unless they mention
+# Cardputer-only hardware or facts. Card and persona conversations are not reused (they describe the Cardputer).
+CARDPUTER_GEN = ROOT / "data" / "generated"
+CARDPUTER_KINDS = ("device", "script")
+CARDPUTER_ONLY = re.compile(r"cardputer|\bm5|keyboard|\bG0\b|\bG[12]\b|grove|\bleds?\b|rgb|infrared|\bir\b|"
+                            r"backlight|\bbright|button|stamp|\bvoice|\bspeak|\bSAM\b|psram|\b8 ?MB\b|FN8|"
+                            r"1\.14|240 ?x ?135|\b120 ?mAh|1400 ?mAh", re.I)
+
+
+RLCD_ABSENT = re.compile(r"\bvoice (?:on|off)\b|\bscreen \d+ ?%|\bbrightness \d+ ?%", re.I)
+
+
+def cardputer_convs():
+    if BOARD != "rlcd":
+        return
+    for f in sorted(CARDPUTER_GEN.glob("device*.jsonl")):
+        for c in read_jsonl(f):
+            text = " ".join(t["user"] + " " + t["bot"] for t in c["turns"])
+            if c["kind"] in CARDPUTER_KINDS and not CARDPUTER_ONLY.search(text):
+                yield dict(c, card=None, from_cardputer=True)
+
+
 def clean(t):
     u, b = ascii_fold(t["user"]), ascii_fold(t["bot"])
     if b.startswith("Device: "):  # the reply copied the ctx prefix
@@ -149,8 +190,8 @@ def main():
     print(f"knowledge base: {len(passages)} passages")
     stats, miss = Counter(), Counter()
     convs, seen = [], set()
-    for c in small_sd_copies((c for f in sorted(GEN_DIR.glob("device*.jsonl")) for c in read_jsonl(f)),
-                             random.Random(cfg.SEED + 5)):
+    own = (c for f in sorted(GEN_DIR.glob("device*.jsonl")) for c in read_jsonl(f))
+    for c in small_sd_copies(itertools.chain(own, cardputer_convs()), random.Random(cfg.SEED + 5)):
         st = D.DevStatus(**c["status"])
         plan = c.get("plan")
         out, seen_nums = [], set()
@@ -210,12 +251,16 @@ def main():
                 if key_value(dev).lower() not in b.lower():
                     stats["cut_no_value"] += 1  # the reply must state the reading / result
                     break
+                m = RLCD_ABSENT.search(b) if BOARD == "rlcd" else None
+                if m and m.group(0).lower() not in dev.lower():
+                    stats["cut_absent_hw"] += 1  # Cardputer readings this board has no line for
+                    break
                 if RAISED.search(b) and "raised" not in dev:
                     stats["cut_false_claim"] += 1  # claims a brightness change the device did not make
                     break
             ctx = " ".join(x for x in (dev, calc, None if dev else card) if x) or None
             allowed = numbers(" ".join(x for x in (ctx or "", u, card or "") if x)) | seen_nums
-            bad = numbers(b) - allowed - {str(i) for i in range(11)}  # small counts are fine
+            bad = numbers(b) - allowed - {str(i) for i in range(11)} - BOARD_NUMS  # small counts are fine
             if bad:
                 stats["cut_number"] += 1
                 if stats["cut_number"] <= 8:
@@ -233,6 +278,7 @@ def main():
             continue
         seen.add(key)
         convs.append({"kind": c["kind"], "turns": out})
+        stats["conv_from_cardputer"] += bool(c.get("from_cardputer"))
 
     rng.shuffle(convs)
     n_val = max(1, int(len(convs) * cfg.VAL_FRACTION)) if len(convs) > 1 else 0

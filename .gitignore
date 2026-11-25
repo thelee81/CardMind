@@ -57,3 +57,12 @@ assets/screenshots/math_fail*
 
 # personal drafts (LinkedIn etc.), not for the repo
 posts/
+# RLCD board run (CARDMIND_BOARD=rlcd): same rules as data/
+data_rlcd/*
+!data_rlcd/generated/
+data_rlcd/generated/*
+!data_rlcd/generated/device*.jsonl
+!data_rlcd/dataset/
+data_rlcd/dataset/*
+!data_rlcd/dataset/train.jsonl
+!data_rlcd/dataset/val.jsonl

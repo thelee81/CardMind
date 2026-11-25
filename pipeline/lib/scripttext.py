@@ -13,9 +13,12 @@ Statements (separated by ";"):
   ir ADDR CMD          NEC infrared, 0..255 each (decimal or 0x hex)
   wait MS              1..60000
   show READING         print a reading on screen
+  sound NAME           RLCD board: chime woof ribbit tweet honk ring ufo thunder roar notify startup
+  face NAME            RLCD board: the eyes' emotion (normal = automatic) happy sad angry surprised ...
   repeat N { ... }     N 1..100
   if READING OP N { ... } [else { ... }]     OP: < > <= >= == !=
-READING: battery (%), temp (C), mic (dBFS), ram (KB free), uptime (s), bright (%), vol (%)
+READING: battery (%), temp (C), mic (dBFS), ram (KB free), uptime (s), bright (%), vol (%),
+         room (C, RLCD SHTC3), humid (% relative humidity, RLCD)
 
 Limits: 200 characters, 48 statements, 4 nested blocks, worst case 2000 steps and 10 minutes.
 parse() returns (program, None) or (None, "error message"). The model writes "Script: <script>".
@@ -29,7 +32,9 @@ MAX_MS = 600000
 MIC_MS = 600  # a microphone reading takes this long
 
 COLORS = ["off", "red", "green", "blue", "white", "yellow", "orange", "purple", "pink", "cyan", "magenta"]
-READINGS = ["battery", "temp", "mic", "ram", "uptime", "bright", "vol"]
+READINGS = ["battery", "temp", "mic", "ram", "uptime", "bright", "vol", "room", "humid"]
+SOUNDS = ["chime", "woof", "ribbit", "tweet", "honk", "ring", "ufo", "thunder", "roar", "notify", "startup"]
+FACES = ["normal", "happy", "sad", "angry", "surprised", "sleepy", "suspicious", "confused", "love", "curious"]
 OPS = ["<", ">", "<=", ">=", "==", "!="]
 PREFIX = "Script:"
 
@@ -158,6 +163,16 @@ class _P:
             return ("ir", self.num(0, 255, "ir"), self.num(0, 255, "ir"))
         if w == "wait":
             return ("wait", self.num(1, 60000, "wait"))
+        if w == "sound":
+            k2, c = self.take()
+            if k2 != "w" or c not in SOUNDS:
+                raise ValueError("sound: name expected")
+            return ("sound", SOUNDS.index(c))
+        if w == "face":
+            k2, c = self.take()
+            if k2 != "w" or c not in FACES:
+                raise ValueError("face: name expected")
+            return ("face", FACES.index(c))
         if w == "show":
             k2, r = self.take()
             if k2 != "w" or r not in READINGS:
@@ -243,6 +258,10 @@ def to_text(stmts):
             out.append(f"ir {s[1]} {s[2]}")
         elif k == "show":
             out.append("show " + READINGS[s[1]])
+        elif k == "sound":
+            out.append("sound " + SOUNDS[s[1]])
+        elif k == "face":
+            out.append("face " + FACES[s[1]])
         elif k == "repeat":
             out.append(f"repeat {s[1]} {{ {to_text(s[2])} }}")
         elif k == "if":
@@ -289,10 +308,14 @@ def describe(s):
         return f"beep {s[1]} {s[2]}"
     if k == "ir":
         return f"ir {s[1]} {s[2]}"
+    if k == "sound":
+        return "sound " + SOUNDS[s[1]]
+    if k == "face":
+        return "face " + FACES[s[1]]
     return f"{k} {s[1]}"
 
 
-EXAMPLE_READINGS = [78, 41, -47, 44, 4980, 100, 50]  # battery temp mic ram uptime bright vol (host test)
+EXAMPLE_READINGS = [78, 41, -47, 44, 4980, 100, 50, 27, 61]  # battery temp mic ram uptime bright vol room humid
 
 
 def check(text):

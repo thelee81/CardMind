@@ -172,7 +172,7 @@ static void say(const char *s) {
 
 // ---------------------------------------------------------------- Card scripts
 static const char *SCRIPT_DIR = "/espllm/scripts";
-static const char *const UNITS[SR_N] = {"%", " C", " dBFS", " KB", " s", "%", "%"};
+static const char *const UNITS[SR_N] = {"%", " C", " dBFS", " KB", " s", "%", "%", " C", "%"};
 static Script g_script;                     // last script, waiting for Enter or being run
 static bool g_pending = false;
 static char g_last[SCRIPT_MAX_CHARS + 64];  // last valid script, canonical text (for /save)

@@ -1,0 +1,12 @@
+{
+  "name": "cardmind-core",
+  "version": "1.0.0",
+  "description": "CardMind portable C core (engine, tokenizer, BM25 kb, calculator, chat, device matcher, scripts). Lets other boards' PlatformIO projects build the same sources; the Cardputer build ignores this file.",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "srcFilter": ["+<*.c>"],
+    "includeDir": ".",
+    "flags": ["-O2"]
+  }
+}

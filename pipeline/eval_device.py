@@ -8,6 +8,7 @@ Plus a few fact questions (card) and "no such sensor" questions.
 
   python pipeline/eval_device.py data/sd_card/espllm/model.bin[,kb.bin] [more models]
 """
+import importlib
 import random
 import re
 import subprocess
@@ -16,7 +17,7 @@ from dataclasses import asdict
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 from lib import devtext as D  # noqa: E402
-from lib.common import ROOT, SD_DIR  # noqa: E402
+from lib.common import BOARD, ROOT, SD_DIR  # noqa: E402
 
 HOST = ROOT / "firmware" / "host" / ("host_chat.exe" if sys.platform == "win32" else "host_chat")
 NUM = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
@@ -45,8 +46,40 @@ CARD_QS = ["what pins does the sd card use", "how do i enter download mode", "wh
            "how big is the battery", "does it support bluetooth"]
 MISSING_QS = ["what is the humidity", "does it have an accelerometer", "can you take a photo", "is there gps"]
 
+if BOARD == "rlcd":  # Waveshare ESP32-S3-RLCD-4.2 (run with CARDMIND_BOARD=rlcd)
+    QUESTIONS = {
+        D.BATTERY: ["battery level?", "how much battery do i have left", "check the battery voltage"],
+        D.ROOM: ["how warm is the room", "humidity?", "room temperature please"],
+        D.TEMP: ["how warm is the chip right now", "is the cpu running hot"],
+        D.CLOCK: ["what time is it", "what's the date today", "clock?"],
+        D.RADAR: ["is anyone near the radar", "radar reading?", "is someone moving nearby"],
+        D.PHONE: ["is my phone connected", "chronos status?"],
+        D.I2C: ["scan the i2c bus", "what i2c devices are connected"],
+        D.MEMORY: ["free memory?", "how much psram is free", "ram check"],
+        D.SD: ["is a tf card inserted", "how full is the sd card", "storage?"],
+        D.MIC: ["is it noisy here", "measure the noise", "mic level?"],
+        D.WIFI: ["scan wifi networks", "any wifi around?"],
+        D.UPTIME: ["uptime?", "how long since boot"],
+        D.VOLUME: ["what's the volume at", "speaker volume?"],
+        D.CHIP: ["what chip is inside", "mac address?"],
+        D.STATUS: ["status report", "give me an overview", "system summary"],
+        D.VOL_SET: ["volume 25", "turn the volume up", "mute"],
+        D.BEEP: ["beep", "play a test tone"],
+        D.SOUND: ["play the woof sound", "make a frog noise", "play chime"],
+        D.FACE: ["make the eyes happy", "look sleepy", "eyes back to normal"],
+        D.LED_SET: ["set the led to orange", "turn the rgb light blue"],
+        D.BRIGHT_SET: ["set brightness to 60", "dim the screen a bit"],
+        D.IR_SEND: ["send ir address 7 command 21"],
+    }
+    CARD_QS = ["how do i charge the battery", "what screen does this board have", "how do i pair my phone",
+               "what does the radar detect", "where is the tf card slot", "how do i open the web chat",
+               "what is i2c", "what is a pull-up resistor"]
+    MISSING_QS = ["does it have an accelerometer", "can you take a photo", "is there gps", "does it have a camera"]
+    _b4 = importlib.import_module("04_build_device_dataset")
+    key_value = _b4.key_value  # same rule as the training data
 
-def key_value(line):
+
+def _key_value(line):
     """What a correct reply must contain."""
     body = line[len("Device: "):]
     for word in ("no SD card", "nothing", "not changed", "not sent", "failed", "no networks", "off"):
@@ -60,6 +93,10 @@ def key_value(line):
         return m.group(1)
     nums = NUM.findall(body.replace("ESP32-S3", "").replace("SDA G2, SCL G1", ""))
     return nums[0] if nums else body.split()[0]
+
+
+if BOARD != "rlcd":
+    key_value = _key_value
 
 
 def run(arg, items):

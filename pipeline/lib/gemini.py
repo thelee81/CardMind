@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .common import BATCH_DIR, cfg, read_jsonl, write_jsonl
+from .common import BATCH_DIR, ROOT, cfg, read_jsonl, write_jsonl
 
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 THINKING_BUDGET = {"low": 0, "medium": 2048, "high": 8192, "xhigh": 16384, "max": 24576}
@@ -110,8 +110,8 @@ def submit(job, items, model, est_output_tokens, yes=False):
     print(f"  est. input  {in_tok / 1e6:.2f}M tokens")
     print(f"  est. output {out_tok / 1e6:.2f}M tokens (incl. thinking)")
     print(f"  est. cost   ~${_price(model, in_tok, out_tok):,.2f} (rough; actual usage is billed)")
-    print(f"  already done {len(items) - len(todo)}, spent so far ~${spent_before:.2f}; "
-          f"hard cap BUDGET_USD = ${cfg.BUDGET_USD:.2f} across all jobs is checked per job")
+    print(f"  already done {len(items) - len(todo)}, spent on this job ~${spent_before:.2f}, on Gemini in total "
+          f"~${_spent_all():.2f}; hard cap BUDGET_USD = ${cfg.BUDGET_USD:.2f} (all jobs, all data folders)")
     if not yes:
         raise SystemExit("Dry run only. Re-run with --yes to run it.")
     write_jsonl(BATCH_DIR / f"{job}_manifest.jsonl", [{"custom_id": c, **m} for c, _, m in items])
@@ -143,12 +143,15 @@ def submit(job, items, model, est_output_tokens, yes=False):
 
 
 def _spent_all():
-    """Spend across every Gemini job recorded on disk (the cap is global)."""
+    """Spend across every Gemini job recorded on disk, in every data folder (data/, data_rlcd/, ...;
+    not the demo folder): the cap is global, whichever board is being generated."""
     total = 0.0
-    for p in BATCH_DIR.glob("*_raw.jsonl"):
-        job = p.name[:-len("_raw.jsonl")]
-        model = cfg.PLANNER_MODEL if job == "curriculum" else cfg.GENERATOR_MODEL
-        total += _spent(_done(job).values(), model)
+    folders = {BATCH_DIR} | {d / "batches" for d in ROOT.glob("data*") if d.is_dir() and d.name != "data_demo"}
+    for folder in folders:
+        for p in folder.glob("*_raw.jsonl"):
+            job = p.name[:-len("_raw.jsonl")]
+            model = cfg.PLANNER_MODEL if job == "curriculum" else cfg.GENERATOR_MODEL
+            total += _spent({r["custom_id"]: r for r in read_jsonl(p)}.values(), model)
     return total
 
 

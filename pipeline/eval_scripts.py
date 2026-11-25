@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 from lib import scripttext as SC  # noqa: E402
-from lib.common import ROOT, SD_DIR  # noqa: E402
+from lib.common import BOARD, ROOT, SD_DIR  # noqa: E402
 
 HOST = ROOT / "firmware" / "host" / ("host_chat.exe" if sys.platform == "win32" else "host_chat")
 
@@ -51,6 +51,40 @@ CASES = [
     ("blink 500 times", None),
     ("scan wifi every minute", None),
 ]
+
+# Waveshare ESP32-S3-RLCD-4.2 (CARDMIND_BOARD=rlcd): no LED, backlight or IR; sounds, eyes, room sensor.
+RLCD_CASES = [
+    ("beep 4 times", ["repeat 4", "beep"]),
+    ("beep every 5 seconds, 6 times", ["repeat 6", "beep", "wait 5000"]),
+    ("beep twice", ["repeat 2", "beep"]),
+    ("wait 10 seconds then beep", ["wait 10000", "beep"]),
+    ("play the woof sound 3 times", ["repeat 3", "sound woof"]),
+    ("wait 5 seconds then play chime", ["wait 5000", "sound chime"]),
+    ("make the eyes happy then sleepy after 10 seconds", ["face happy", "wait 10000", "face sleepy"]),
+    ("look angry for 3 seconds then back to normal", ["face angry", "wait 3000", "face normal"]),
+    ("if the battery is below 20 percent beep", ["if battery < 20", "beep"]),
+    ("if the room is over 28 degrees look sad", ["if room > 28", "face sad"]),
+    ("if humidity is above 70 percent play the ufo sound", ["if humid > 70", "sound ufo"]),
+    ("if the chip is over 50 degrees beep else play tweet", ["if temp > 50", "beep", "else", "sound tweet"]),
+    ("if it is noisy look surprised", ["if mic", "face surprised"]),
+    ("if free ram is under 30 kb beep", ["if ram < 30", "beep"]),
+    ("show the battery every 10 seconds, 5 times", ["repeat 5", "show battery", "wait 10000"]),
+    ("show the room temperature every 30 seconds 4 times", ["repeat 4", "show room", "wait 30000"]),
+    ("show the humidity 3 times, every 5 seconds", ["repeat 3", "show humid", "wait 5000"]),
+    ("check the noise level every 2 seconds 10 times", ["repeat 10", "show mic", "wait 2000"]),
+    ("set the volume to 20 then beep", ["vol 20", "beep"]),
+    ("beep at 1000 hz for half a second", ["beep 1000 500"]),
+    ("countdown 5 seconds then play honk", ["wait", "sound honk"]),
+    ("every 10 seconds for a minute, if the room is loud look angry, else normal",
+     ["repeat 6", "if mic", "face angry", "face normal", "wait 10000"]),
+    ("beep after 2 minutes", ["wait 60000", "beep"]),
+    ("woof forever", None),
+    ("beep every day at 7 am", None),
+    ("play ribbit 500 times", None),
+    ("scan wifi every minute", None),
+]
+if BOARD == "rlcd":
+    CASES = RLCD_CASES
 
 
 def run(arg):

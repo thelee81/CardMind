@@ -10,7 +10,11 @@
 #define MIC_MS 600L
 #define MAX_TOK 128
 
-const char *const SCRIPT_READINGS[SR_N] = {"battery", "temp", "mic", "ram", "uptime", "bright", "vol"};
+const char *const SCRIPT_READINGS[SR_N] = {"battery", "temp", "mic", "ram", "uptime", "bright", "vol", "room", "humid"};
+const char *const SCRIPT_SOUNDS[SCRIPT_N_SOUNDS] = {"chime", "woof", "ribbit", "tweet", "honk", "ring",
+                                                   "ufo", "thunder", "roar", "notify", "startup"};
+const char *const SCRIPT_FACES[SCRIPT_N_FACES] = {"normal", "happy", "sad", "angry", "surprised", "sleepy",
+                                                 "suspicious", "confused", "love", "curious"};
 const char *const SCRIPT_COLORS[11] = {"off", "red", "green", "blue", "white", "yellow",
                                        "orange", "purple", "pink", "cyan", "magenta"};
 static const char *const OPS[6] = {"<", ">", "<=", ">=", "==", "!="};
@@ -168,6 +172,16 @@ static int stmt(P *p, int depth, short *idx) {
     } else if (!strcmp(w, "wait")) {
         s->kind = SK_WAIT;
         if (num(p, 1, 60000, "wait", &s->a)) return -1;
+    } else if (!strcmp(w, "sound")) {
+        const Tok *c = take(p);
+        int k = c->kind == T_WORD ? index_of(c->text, SCRIPT_SOUNDS, SCRIPT_N_SOUNDS) : -1;
+        if (k < 0) return fail(p, "sound: name expected");
+        s->kind = SK_SOUND; s->a = k;
+    } else if (!strcmp(w, "face")) {
+        const Tok *c = take(p);
+        int k = c->kind == T_WORD ? index_of(c->text, SCRIPT_FACES, SCRIPT_N_FACES) : -1;
+        if (k < 0) return fail(p, "face: name expected");
+        s->kind = SK_FACE; s->a = k;
     } else if (!strcmp(w, "show")) {
         const Tok *r = take(p);
         int k = r->kind == T_WORD ? index_of(r->text, SCRIPT_READINGS, SR_N) : -1;
@@ -288,6 +302,8 @@ static int text_list(const Script *s, short i, char *out, int size, int len) {
             break;
         case SK_IR: len = put(out, size, len, "%sir %ld %ld", "", n->a, n->b); break;
         case SK_SHOW: len = put(out, size, len, "show %s", SCRIPT_READINGS[n->a], 0, 0); break;
+        case SK_SOUND: len = put(out, size, len, "sound %s", SCRIPT_SOUNDS[n->a], 0, 0); break;
+        case SK_FACE: len = put(out, size, len, "face %s", SCRIPT_FACES[n->a], 0, 0); break;
         case SK_REPEAT:
             len = put(out, size, len, "%srepeat %ld { ", "", n->a, 0);
             len = text_list(s, n->body, out, size, len);
@@ -322,6 +338,8 @@ void script_describe(const SNode *n, char *out, int size) {
     case SK_BRIGHT: snprintf(out, (size_t)size, "bright %ld", n->a); break;
     case SK_VOL: snprintf(out, (size_t)size, "vol %ld", n->a); break;
     case SK_WAIT: snprintf(out, (size_t)size, "wait %ld", n->a); break;
+    case SK_SOUND: snprintf(out, (size_t)size, "sound %s", SCRIPT_SOUNDS[n->a]); break;
+    case SK_FACE: snprintf(out, (size_t)size, "face %s", SCRIPT_FACES[n->a]); break;
     default: out[0] = 0;
     }
 }

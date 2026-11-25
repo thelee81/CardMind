@@ -3,6 +3,7 @@
 //
 //   repeat 5 { led red; wait 300; led off; wait 300 }
 //   if battery < 20 { beep 1000 500 } else { show battery }
+//   if room > 28 { face sad; sound thunder }          (RLCD board: sound, face, room, humid)
 #pragma once
 
 #ifdef __cplusplus
@@ -13,8 +14,11 @@ extern "C" {
 #define SCRIPT_MAX_NODES 48
 #define SCRIPT_PREFIX "Script:"
 
-enum { SK_LED, SK_BRIGHT, SK_VOL, SK_BEEP, SK_IR, SK_WAIT, SK_SHOW, SK_REPEAT, SK_IF };
-enum { SR_BATTERY, SR_TEMP, SR_MIC, SR_RAM, SR_UPTIME, SR_BRIGHT, SR_VOL, SR_N };
+// New kinds and readings are appended, so the ids of the older ones stay the same.
+enum { SK_LED, SK_BRIGHT, SK_VOL, SK_BEEP, SK_IR, SK_WAIT, SK_SHOW, SK_REPEAT, SK_IF, SK_SOUND, SK_FACE };
+enum { SR_BATTERY, SR_TEMP, SR_MIC, SR_RAM, SR_UPTIME, SR_BRIGHT, SR_VOL, SR_ROOM, SR_HUMID, SR_N };
+#define SCRIPT_N_SOUNDS 11
+#define SCRIPT_N_FACES 10
 
 typedef struct {
     signed char kind;
@@ -39,6 +43,8 @@ typedef struct {
 
 extern const char *const SCRIPT_READINGS[SR_N];
 extern const char *const SCRIPT_COLORS[11];
+extern const char *const SCRIPT_SOUNDS[SCRIPT_N_SOUNDS];  // same names as DEV_SOUNDS (device.c)
+extern const char *const SCRIPT_FACES[SCRIPT_N_FACES];    // same names as DEV_FACES; "normal" = automatic
 
 // Returns 0 and fills s, or -1 and writes the error message (same text as Python) into err.
 int script_parse(const char *text, Script *s, char *err, int errsize);

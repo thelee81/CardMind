@@ -20,6 +20,51 @@ static const struct { int addr; const char *name; } I2C_NAMES[] = {
     {0x70, "QMP6988 pressure"}, {0x76, "BMP280 pressure"}, {0x77, "BMP280 pressure"},
 };
 
+// ---------------------------------------------------------------- board
+static int g_board = DEV_BOARD_CARDPUTER;
+void dev_set_board(int board) { g_board = board; }
+int dev_board(void) { return g_board; }
+
+// RLCD: the board's own I2C devices (named before the generic list; 0x70 is the SHTC3 here)
+static const struct { int addr; const char *name; } RLCD_I2C[] = {
+    {0x18, "ES8311 speaker codec"}, {0x40, "ES7210 mic ADC"}, {0x51, "PCF85063 clock"},
+    {0x70, "SHTC3 temperature and humidity"},
+};
+const char *const DEV_SOUNDS[DEV_N_SOUNDS] = {"chime", "woof", "ribbit", "tweet", "honk", "ring",
+                                              "ufo", "thunder", "roar", "notify", "startup"};
+const char *const DEV_FACES[DEV_N_FACES] = {"normal", "happy", "sad", "angry", "surprised", "sleepy",
+                                            "suspicious", "confused", "love", "curious"};
+// other words for a sound / a face: {word, index}
+static const struct { const char *w; int i; } SOUND_ALIAS[] = {
+    {"bark", 1}, {"dog", 1}, {"frog", 2}, {"croak", 2}, {"bird", 3}, {"chirp", 3}, {"horn", 4},
+    {"bell", 5}, {"alien", 6}, {"storm", 7}, {"lion", 8},
+};
+static const struct { const char *w; int i; } FACE_ALIAS[] = {
+    {"neutral", 0}, {"smile", 1}, {"smiling", 1}, {"glad", 1}, {"cry", 2}, {"frown", 2}, {"mad", 3},
+    {"cross", 3}, {"shocked", 4}, {"tired", 5}, {"sleep", 5}, {"wink", 6}, {"puzzled", 7}, {"heart", 8},
+    {"hearts", 8},
+};
+static const char *const FACE_NOUN[] = {"face", "eyes", "eye", "look", "expression", "emotion", "mood", "act",
+                                        "pretend", "feel", NULL};
+static const char *const FACE_VERB[] = {"smile", "frown", "cry", "wink", NULL};
+static const char *const W_ROOM[] = {"room", "humidity", "humid", "ambient", "air", "indoor", "indoors",
+                                     "shtc3", "weather", NULL};
+static const char *const W_CLOCK[] = {"time", "clock", "date", "day", "today", "rtc", "hour", "pcf85063",
+                                      "year", "month", NULL};
+static const char *const W_RADAR[] = {"radar", "motion", "moving", "movement", "target", "targets", "someone",
+                                      "anyone", "anybody", "people", "person", "presence", "ld2451", NULL};
+static const char *const W_PHONE[] = {"phone", "bluetooth", "ble", "chronos", "paired", "pairing", "android", NULL};
+static const char *const CHIP_HEAT[] = {"chip", "cpu", "processor", "mcu", "esp32", "esp32s3", "overheating",
+                                        "overheat", "internal", NULL};
+static const char *const GROVE_ONLY[] = {"grove", "port", "unit", "units", "hy2", NULL};
+// an "i2c" question is a scan only with one of these; "what is i2c" goes to the knowledge cards
+static const char *const SCAN_W[] = {"scan", "connected", "attached", "plugged", "devices", "device", "found",
+                                     "detect", "detected", "find", "list", "sensors", "addresses", "address",
+                                     "anything", "on", NULL};
+static const char *const DAYS[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+static const char *const MONTHS[] = {"January", "February", "March", "April", "May", "June", "July",
+                                     "August", "September", "October", "November", "December"};
+
 typedef struct { char w[MAX_WORDS][WORD_LEN + 1]; int n; } Words;
 
 // ---------------------------------------------------------------- word sets (NULL-terminated)
@@ -179,6 +224,24 @@ void dev_parse(const char *text, DevReq *r) {
     for (int i = 0; i < ws.n; i++) if (num(ws.w[i], &v)) { first_num = v; break; }
     if (!question && any(&ws, SCRIPT_CUES)) { r->script = 1; return; }  // script request: ctx says "Mode: script."
 
+    if (!question && !howto && g_board == DEV_BOARD_RLCD) {
+        // a named sound: "play the woof sound", "bark", "ring the bell"
+        for (int i = 0; i < ws.n; i++) {
+            for (int k = 0; k < DEV_N_SOUNDS; k++)
+                if (!strcmp(ws.w[i], DEV_SOUNDS[k])) { r->intent = DEV_SOUND; r->arg = k; return; }
+            for (int k = 0; k < (int)(sizeof(SOUND_ALIAS) / sizeof(SOUND_ALIAS[0])); k++)
+                if (!strcmp(ws.w[i], SOUND_ALIAS[k].w)) { r->intent = DEV_SOUND; r->arg = SOUND_ALIAS[k].i; return; }
+        }
+        // the eyes: "look happy", "make a sad face", "smile"
+        if (any(&ws, FACE_NOUN) || any(&ws, FACE_VERB)) {
+            for (int i = 0; i < ws.n; i++) {
+                for (int k = 0; k < DEV_N_FACES; k++)
+                    if (!strcmp(ws.w[i], DEV_FACES[k])) { r->intent = DEV_FACE; r->arg = k; return; }
+                for (int k = 0; k < (int)(sizeof(FACE_ALIAS) / sizeof(FACE_ALIAS[0])); k++)
+                    if (!strcmp(ws.w[i], FACE_ALIAS[k].w)) { r->intent = DEV_FACE; r->arg = FACE_ALIAS[k].i; return; }
+            }
+        }
+    }
     if (!question && !howto) {
         if (any(&ws, IR_NOUN) && any(&ws, IR_VERB)) {
             r->intent = DEV_IR_SEND;
@@ -228,6 +291,28 @@ void dev_parse(const char *text, DevReq *r) {
         if (!any(&ws, READ_WORDS[k].words)) continue;
         if (READ_WORDS[k].intent == DEV_MIC && any(&ws, SPK_W)) continue;
         found[nf++] = READ_WORDS[k].intent;
+    }
+    if (g_board == DEV_BOARD_RLCD) {
+        if (any(&ws, W_ROOM)) found[nf++] = DEV_ROOM;
+        if (any(&ws, W_CLOCK)) found[nf++] = DEV_CLOCK;
+        if (any(&ws, W_RADAR)) found[nf++] = DEV_RADAR;
+        if (any(&ws, W_PHONE)) found[nf++] = DEV_PHONE;
+        if (has(&ws, "tf")) found[nf++] = DEV_SD;
+        int chip_heat = any(&ws, CHIP_HEAT), grove_only = any(&ws, GROVE_ONLY), scan = any(&ws, SCAN_W);
+        int m = 0;
+        for (int k = 0; k < nf; k++) {
+            int f = found[k];
+            if (f == DEV_TEMP && !chip_heat) f = DEV_ROOM;            // "temperature" here is the room
+            if (f == DEV_GROVE && !grove_only) {                      // "i2c": the board's bus
+                if (question && !scan) continue;                      // "what is i2c": a facts question
+                f = DEV_I2C;
+            }
+            int dup = 0;
+            for (int j = 0; j < m; j++) if (found[j] == f) dup = 1;
+            if (!dup) found[m++] = f;
+        }
+        nf = m;
+        if (!nf && any(&ws, GROVE_WEAK)) found[nf++] = DEV_I2C;
     }
     if (!nf && any(&ws, GROVE_WEAK)) found[nf++] = DEV_GROVE;
     int has_uptime = 0, ti = -1, ci = -1;
@@ -294,10 +379,101 @@ static const char *mic_label(int db) {
     return db <= -55 ? "very quiet" : db <= -40 ? "quiet" : db <= -25 ? "moderate" : "loud";
 }
 
+static const char *i2c_name(int addr) {
+    if (g_board == DEV_BOARD_RLCD)
+        for (int j = 0; j < (int)(sizeof(RLCD_I2C) / sizeof(RLCD_I2C[0])); j++)
+            if (RLCD_I2C[j].addr == addr) return RLCD_I2C[j].name;
+    for (int j = 0; j < (int)(sizeof(I2C_NAMES) / sizeof(I2C_NAMES[0])); j++)
+        if (I2C_NAMES[j].addr == addr) return I2C_NAMES[j].name;
+    return NULL;
+}
+
+// RLCD Device lines: the board's own readings, and what it does not have. Returns -1 if the intent
+// is formatted as on the Cardputer.
+static int rlcd_line(const DevReq *r, const DevStatus *st, char *out, int outsize) {
+    char a[48], b[48], c[48], d[48];
+    int len = 0;
+    out[0] = 0;
+#define P(...) (len += snprintf(out + len, len < outsize ? (size_t)(outsize - len) : 0, __VA_ARGS__))
+    switch (r->intent) {
+    case DEV_MEMORY:
+        size_kb(st->model_kb, a, sizeof(a));
+        size_kb(st->psram_kb, b, sizeof(b));
+        size_kb(st->psram_total_kb, c, sizeof(c));
+        P("Device: free RAM %d KB, largest free block %d KB, PSRAM %s free of %s, flash %d MB, model %s, context %d tokens.",
+          st->heap_kb, st->block_kb, b, c, st->flash_mb, a, st->ctx_len);
+        break;
+    case DEV_VOLUME: P("Device: speaker volume %d%%.", st->vol); break;
+    case DEV_STATUS:
+        volts(st->bat_mv, a, sizeof(a));
+        tenths(st->temp_c10, b, sizeof(b));
+        uptime(st->uptime_s, c, sizeof(c));
+        P("Device: battery %s about %d%%, chip %s C, ", a, st->bat_pct, b);
+        if (st->room_ok) { tenths(st->room_c10, d, sizeof(d)); P("room %s C %d%% humidity, ", d, st->room_rh); }
+        P("free RAM %d KB, ", st->heap_kb);
+        if (!st->sd_type) P("no SD card");
+        else {
+            size_mb(st->sd_total_mb, a, sizeof(a));
+            size_mb(st->sd_used_mb, d, sizeof(d));
+            P("SD card %s (%s used)", a, d);
+        }
+        P(", volume %d%%, up %s.", st->vol, c);
+        break;
+    case DEV_ROOM:
+        if (!st->room_ok) { P("Device: room sensor (SHTC3) not responding."); break; }
+        tenths(st->room_c10, a, sizeof(a));
+        P("Device: room temperature %s C, humidity %d%%.", a, st->room_rh);
+        break;
+    case DEV_CLOCK:
+        if (!st->clock_ok) { P("Device: clock not set yet, it needs Wi-Fi or the phone app once."); break; }
+        P("Device: time %02d:%02d, %s %d %s %d.", st->hour, st->minute, DAYS[st->wday % 7], st->day,
+          MONTHS[(st->month + 11) % 12], st->year);
+        break;
+    case DEV_RADAR:
+        if (!st->radar_ok) { P("Device: no radar data, the HLK-LD2451 is not connected."); break; }
+        if (!st->radar_n) { P("Device: radar sees nothing moving."); break; }
+        P("Device: radar sees %d moving target%s, nearest %d m at %d degrees, %s at %d km/h.", st->radar_n,
+          st->radar_n == 1 ? "" : "s", st->radar_dist, st->radar_angle,
+          st->radar_approach ? "approaching" : "moving away", st->radar_speed);
+        break;
+    case DEV_PHONE:
+        if (st->phone_ok) P("Device: phone connected over Bluetooth (Chronos app).");
+        else P("Device: no phone connected, pair RLCD Eyes in the Chronos app.");
+        break;
+    case DEV_I2C:
+        P("Device: I2C scan (SDA G13, SCL G14) found ");
+        if (!st->grove_n) P("nothing");
+        for (int k = 0; k < st->grove_n && k < DEV_MAX_ADDRS; k++) {
+            const char *name = i2c_name(st->grove[k]);
+            if (name) P("%s0x%02X (%s)", k ? ", " : "", st->grove[k], name);
+            else P("%s0x%02X (unknown)", k ? ", " : "", st->grove[k]);
+        }
+        P(".");
+        break;
+    case DEV_SOUND: P("Device: played the %s sound.", DEV_SOUNDS[r->arg]); break;
+    case DEV_FACE:
+        if (r->arg == 0) P("Device: eyes back to normal.");
+        else P("Device: eyes look %s%s for 1 minute.", r->arg == 8 ? "in " : "", DEV_FACES[r->arg]);  // in love
+        break;
+    case DEV_GROVE: P("Device: this board has no Grove port, I2C is on header P1 pin 14 (SDA G13) and pin 16 (SCL G14)."); break;
+    case DEV_SCREEN:
+    case DEV_BRIGHT_SET: P("Device: the reflective screen has no backlight, so there is no brightness to set."); break;
+    case DEV_LED_SET: P("Device: this board has no RGB LED."); break;
+    case DEV_IR_SEND: P("Device: this board has no infrared transmitter."); break;
+    default: return -1;
+    }
+#undef P
+    return len < outsize ? len : outsize - 1;
+}
+
 int dev_line(const DevReq *r, const DevStatus *st, char *out, int outsize) {
     char a[48], b[48], c[48], d[48];
     int len = 0;
     out[0] = 0;
+    if (g_board == DEV_BOARD_RLCD && r->intent != DEV_NONE) {
+        int n = rlcd_line(r, st, out, outsize);
+        if (n >= 0) return n;
+    }
 #define P(...) (len += snprintf(out + len, len < outsize ? (size_t)(outsize - len) : 0, __VA_ARGS__))
     switch (r->intent) {
     case DEV_NONE: return 0;
@@ -406,6 +582,18 @@ void dev_example(DevStatus *st) {
     strcpy(st->idf, "v4.4.7");
     st->new_bright = -1; st->new_vol = -1; st->led = -1; st->bright_raised = 0;
     st->beep_hz = 2000; st->beep_ms = 200;
+    if (g_board == DEV_BOARD_RLCD) {  // Waveshare ESP32-S3-RLCD-4.2 (N16R8)
+        st->heap_kb = 74; st->block_kb = 60; st->flash_mb = 16; st->model_kb = 2706; st->ctx_len = 512;
+        st->psram_kb = 5232; st->psram_total_kb = 8192;
+        st->bright = 100; st->vol = 30; st->voice_on = 0;
+        strcpy(st->mac, "A4:CB:8F:DB:6A:5C");
+        st->grove_n = 4; st->grove[0] = 0x18; st->grove[1] = 0x40; st->grove[2] = 0x51; st->grove[3] = 0x70;
+        st->room_ok = 1; st->room_c10 = 268; st->room_rh = 61;
+        st->clock_ok = 1; st->year = 2026; st->month = 11; st->day = 19; st->wday = 4; st->hour = 18; st->minute = 52;
+        st->radar_ok = 1; st->radar_n = 1; st->radar_dist = 4; st->radar_angle = -12; st->radar_speed = 5;
+        st->radar_approach = 1;
+        st->phone_ok = 1;
+    }
 }
 
 // ---------------------------------------------------------------- script hints

@@ -22,8 +22,14 @@ static int read_at(FILE *f, uint32_t off, void *buf, size_t n) {
 }
 
 int kb_open(KB *kb, const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) { memset(kb, 0, sizeof(*kb)); return -1; }
+    return kb_open_fp(kb, f);
+}
+
+int kb_open_fp(KB *kb, FILE *f) {
     memset(kb, 0, sizeof(*kb));
-    kb->f = fopen(path, "rb");
+    kb->f = f;
     if (!kb->f) return -1;
     uint8_t h[64];
     if (read_at(kb->f, 0, h, 64) || memcmp(h, "EKB1", 4) || rd32(h + 4) != 1) { kb_close(kb); return -2; }
